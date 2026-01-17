@@ -12,7 +12,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@aptos-labs/ts-sdk": "^4.0.0",
+    "@aptos-labs/ts-sdk": "^3.1.3",
     "@aptos-labs/wallet-adapter-react": "^7.0.4",
     "@aptos-labs/wallet-standard": "^0.5.1",
     "@radix-ui/react-dialog": "^1.1.15",
