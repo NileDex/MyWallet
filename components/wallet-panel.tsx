@@ -20,6 +20,7 @@ export function WalletPanel({ isOpen, onClose }: WalletPanelProps) {
     const [showBalance, setShowBalance] = useState(true);
     const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isCopied, setIsCopied] = useState(false);
     const { activeRpc, refreshKey } = useNetwork();
 
     const address = account?.address?.toString() || "";
