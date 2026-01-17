@@ -1,0 +1,23 @@
+[
+    {
+        "id": "brkt",
+        "name": "BRKT",
+        "description": "Bracket Protocol",
+        "url": "https://www.brkt.gg/",
+        "logo": "https://images.ctfassets.net/vt5g7b08joig/5Fcsvd2Ojyhmhhp4AGibuV/505b14f27a40108f7703c76dede136d7/BRKT.png"
+    },
+    {
+        "id": "meridian",
+        "name": "Meridian",
+        "description": "Liquidity Layer",
+        "url": "https://app.meridian.money/pools",
+        "logo": "https://images.ctfassets.net/vt5g7b08joig/5q7CkJED8Lry3jtdE2Qpes/e899bd08c7d7fd9397d94aa669a56985/Meridian-Orange.png"
+    },
+    {
+        "id": "canopy",
+        "name": "Canopy",
+        "description": "Canopy is the gateway to Movement DeFi built to optimize liquidity management through an all-in-one yield aggregation platform.",
+        "url": "https://www.canopyhub.xyz/",
+        "logo": "https://docs.canopyhub.xyz/~gitbook/image?url=https%3A%2F%2F1251682653-files.gitbook.io%2F%7E%2Ffiles%2Fv0%2Fb%2Fgitbook-x-prod.appspot.com%2Fo%2Forganizations%252FJiJZg0rsW3ziCtFR2Tr3%252Fsites%252Fsite_63oYG%252Ficon%252F6onbfEaO2n663Jmoib0e%252Fcanopy.svg%3Falt%3Dmedia%26token%3Dc2da62f2-d3df-4a11-a3c7-40cdf531edde&width=32&dpr=4&quality=100&sign=2da0a28b&sv=2"
+    }
+]
