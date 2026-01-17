@@ -100,27 +100,28 @@ export function WalletPanel({ isOpen, onClose }: WalletPanelProps) {
 
                 <div className="flex-1 flex flex-col">
                     {/* Balance Section */}
-                    <div className="p-6 space-y-4">
-                        <div className="flex items-center justify-between">
+                    {/* Balance Section */}
+                    <div className="p-4 md:p-6 space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2">
-                                    <h2 className="text-4xl font-bold">
+                                    <h2 className="text-2xl md:text-4xl font-bold">
                                         {showBalance ? (portfolio ? priceService.formatCurrency(portfolio.netWorth) : "$0.00") : "****"}
                                     </h2>
-                                    <button onClick={() => setShowBalance(!showBalance)} className="text-muted-foreground">
+                                    <button onClick={() => setShowBalance(!showBalance)} className="text-muted-foreground p-1">
                                         {showBalance ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
                                     </button>
                                 </div>
                                 <p className="text-muted-foreground text-sm">~{portfolio?.moveBalance.toFixed(2) || "0"} MOVE</p>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 w-full md:w-auto">
                                 <Button
-                                    className="bg-white text-black rounded-none font-mono text-xs px-4 py-1 h-auto border-none hover:bg-white transition-none"
+                                    className="flex-1 md:flex-none bg-white text-black rounded-none font-mono text-xs px-4 py-1.5 h-auto border-none hover:bg-white transition-none"
                                 >
                                     SEND
                                 </Button>
                                 <Button
-                                    className="bg-white text-black rounded-none font-mono text-xs px-4 py-1 h-auto border-none hover:bg-white transition-none"
+                                    className="flex-1 md:flex-none bg-white text-black rounded-none font-mono text-xs px-4 py-1.5 h-auto border-none hover:bg-white transition-none"
                                     onClick={handleLogout}
                                 >
                                     DISCONNECT
