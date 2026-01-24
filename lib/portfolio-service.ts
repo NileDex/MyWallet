@@ -68,11 +68,13 @@ export async function fetchPortfolio(address: string, indexerUrl: string, rpcUrl
     }));
 
     // 3. Protocol Positions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const protocolPositions: any[] = [];
 
     if (accountResources) {
         accountResources.forEach(resource => {
             const type = resource.type;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const data = resource.data as any;
 
             // Vaults

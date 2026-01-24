@@ -10,6 +10,8 @@ import { CanopyTable } from "./canopy-table";
 import projectsData from "../data/projects.json";
 
 import { priceService } from "@/lib/price-service";
+import { useCurrency } from "@/context/currency-context";
+
 
 interface AssetData {
     name: string;
@@ -76,13 +78,9 @@ function AssetRow({ name, symbol, balance, price, delta, value, iconUri, hasBadg
             <td className="px-3 py-4 text-right">
                 <div className="flex flex-col items-end">
                     <span className="text-sm font-mono text-white">
-                        {(() => {
-                            const p = Number(price.replace('$', ''));
-                            if (p === 0) return '$0.00';
-                            if (p < 1) return `$${p.toFixed(6)}`;
-                            return price;
-                        })()}
+                        {price}
                     </span>
+
                     <span className={`text-[10px] font-mono ${isNegative ? 'text-white opacity-40' : 'text-white opacity-40'}`}>
                         {delta}
                     </span>
@@ -97,9 +95,10 @@ function AssetRow({ name, symbol, balance, price, delta, value, iconUri, hasBadg
     );
 }
 
-export function PositionsTable() {
+export function PositionsTable({ address }: { address?: string }) {
     const { account } = useWallet();
     const { activeRpc } = useNetwork();
+    const { currency } = useCurrency();
     const [isHoldingsExpanded, setIsHoldingsExpanded] = useState(true);
     const [isWalletExpanded, setIsWalletExpanded] = useState(true);
     const [assets, setAssets] = useState<AssetData[]>([]);
@@ -108,13 +107,15 @@ export function PositionsTable() {
     const [isMounted, setIsMounted] = useState(false);
     const [totalValue, setTotalValue] = useState("$0.00");
 
+
     useEffect(() => {
         setIsMounted(true);
     }, []);
 
     useEffect(() => {
         const fetchAssets = async () => {
-            if (!account?.address) return;
+            const targetAddress = address || account?.address?.toString();
+            if (!targetAddress) return;
 
             setIsLoading(true);
             setHasError(false);
@@ -125,7 +126,16 @@ export function PositionsTable() {
                 ) || MOVEMENT_NETWORKS.mainnet;
 
                 const client = new MovementIndexerClient(currentNetwork.indexerUrl);
-                const fetchedAssets = await client.getFungibleAssetsFormatted(account.address.toString());
+
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Request timed out')), 10000)
+                );
+
+                const fetchedAssets = await Promise.race([
+                    client.getFungibleAssetsFormatted(targetAddress),
+                    timeoutPromise
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ]) as any[];
 
                 // Fetch prices
                 const assetWithPrices = await Promise.all(fetchedAssets.map(async (a) => {
@@ -148,7 +158,8 @@ export function PositionsTable() {
 
                 // Calculate total value
                 const total = assetWithPrices.reduce((acc, curr) => acc + (curr.value || 0), 0);
-                setTotalValue(`$${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+                setTotalValue(priceService.formatCurrency(total));
+
 
                 setAssets(assetWithPrices);
             } catch (error) {
@@ -160,7 +171,7 @@ export function PositionsTable() {
         };
 
         fetchAssets();
-    }, [account?.address, activeRpc]);
+    }, [address, account?.address, activeRpc]);
 
     // Split assets
     const positionTokens = assets.filter(a => a.name === 'Position ID Token' || a.name.includes('Position ID'));
@@ -230,13 +241,14 @@ export function PositionsTable() {
                                                     name={asset.name}
                                                     symbol={asset.symbol}
                                                     balance={asset.balanceFormatted}
-                                                    price={`$${(asset.price || 0).toFixed(2)}`}
+                                                    price={priceService.formatCurrency(asset.price || 0)}
                                                     delta={asset.delta || "+0.00%"}
-                                                    value={asset.valueFormatted || "$0.00"}
+                                                    value={priceService.formatValue(Number(asset.balanceFormatted.replace(/,/g, '')), asset.price || 0)}
                                                     iconUri={asset.iconUri}
                                                     hasBadge={asset.symbol === 'MOVE'}
                                                     isScam={asset.name.toLowerCase().includes('movedrops') || asset.name.toLowerCase().includes('drops')}
                                                 />
+
                                             ))
                                         ) : (
                                             <tr>

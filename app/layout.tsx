@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { WalletProvider } from "@/components/wallet-provider";
 import { NetworkProvider } from "@/context/network-context";
+import { CurrencyProvider } from "@/context/currency-context";
 
 export const metadata: Metadata = {
   title: "Movement Network - Connect Wallet Template",
@@ -30,13 +31,18 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <NetworkProvider>
-            <WalletProvider>
-              {children}
-              <Toaster />
-            </WalletProvider>
+            <CurrencyProvider>
+              <WalletProvider>
+                {children}
+                <Toaster />
+              </WalletProvider>
+            </CurrencyProvider>
           </NetworkProvider>
         </ThemeProvider>
       </body>
     </html>
   );
 }
+
+
+

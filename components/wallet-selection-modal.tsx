@@ -51,11 +51,13 @@ export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
           // Use wallet-standard aptos:connect feature with network info
           const networkInfo = {
             chainId: 126, // Movement Mainnet
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             name: "mainnet" as any, // Cast to match expected type
             url: "https://full.mainnet.movementinfra.xyz/v1"
           };
 
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const result = await selectedWallet.features['aptos:connect'].connect(false, networkInfo as any);
 
             // If wallet-standard connection succeeded, now connect via wallet adapter

@@ -22,6 +22,7 @@ export function Header() {
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const formatAddress = (addr: any) => {
     if (!addr) return "";
     const addressStr = addr.toString();

@@ -94,7 +94,7 @@ query GetWalletActivities($ownerAddress: String!, $limit: Int, $offset: Int) {
 // COMPONENT
 // ============================================
 
-export function ActivityTable() {
+export function ActivityTable({ address }: { address?: string }) {
     const { account } = useWallet();
     const { activeRpc } = useNetwork();
     const [activities, setActivities] = useState<FormattedActivity[]>([]);
@@ -201,7 +201,8 @@ export function ActivityTable() {
 
     useEffect(() => {
         const fetchActivities = async () => {
-            if (!account?.address) return;
+            const targetAddress = address || account?.address?.toString();
+            if (!targetAddress) return;
 
             setIsLoading(true);
             setHasError(false);
@@ -213,6 +214,9 @@ export function ActivityTable() {
 
                 setExplorerUrl(currentNetwork.explorers[0].url);
 
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
                 const response = await fetch('/api/indexer', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -220,12 +224,15 @@ export function ActivityTable() {
                         endpoint: currentNetwork.indexerUrl,
                         query: GET_WALLET_ACTIVITIES,
                         variables: {
-                            ownerAddress: account.address.toString(),
+                            ownerAddress: targetAddress,
                             limit: 100,
                             offset: 0,
                         },
                     }),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
@@ -287,7 +294,7 @@ export function ActivityTable() {
         };
 
         fetchActivities();
-    }, [account?.address, activeRpc]);
+    }, [address, account?.address, activeRpc]);
 
     const formatTime = (date: Date): string => {
         return date.toLocaleTimeString('en-US', {

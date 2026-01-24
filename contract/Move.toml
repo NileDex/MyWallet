@@ -1,0 +1,15 @@
+[package]
+name = "Hide"
+version = "0.0.1"
+authors = []
+upgrade_policy = "compatible"
+
+[addresses]
+privacy = "0x00fb0333030be2ebf920a983c7f0100d2925479b899d03a345d498c85e35392d" # Placeholder, will be replaced on publish
+
+[dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "movement"
+subdir = "aptos-move/framework/aptos-framework"
+
+

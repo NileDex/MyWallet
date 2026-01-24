@@ -27,10 +27,16 @@ export class PriceService {
     private cacheDuration = 300000; // 5 minutes
     private isFetching: boolean = false;
     private refreshPromise: Promise<void> | null = null;
+    private exchangeRates: Record<string, number> = { USD: 1, EUR: 1, GBP: 1 };
+    private currentCurrency: string = "USD";
 
     constructor() {
         // Start empty, will fetch on first request
         this.prices = {};
+    }
+
+    setCurrency(currency: string) {
+        this.currentCurrency = currency;
     }
 
     private async refreshPrices(): Promise<void> {
@@ -43,24 +49,35 @@ export class PriceService {
             this.isFetching = true;
             try {
                 const ids = Object.values(COINGECKO_IDS).join(',');
-                const response = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=usd`);
+                // Fetch prices in USD and the exchange rates for multiple currencies
+                const [priceResponse, rateResponse] = await Promise.all([
+                    fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=usd`),
+                    fetch(`https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=eur,gbp`)
+                ]);
 
-                if (!response.ok) throw new Error(`CoinGecko API error: ${response.status}`);
+                if (!priceResponse.ok) throw new Error(`CoinGecko API error: ${priceResponse.status}`);
 
-                const data = await response.json();
+                const priceData = await priceResponse.json();
 
                 // Update prices map
                 Object.entries(COINGECKO_IDS).forEach(([symbol, id]) => {
-                    if (data[id] && data[id].usd) {
-                        this.prices[symbol] = data[id].usd;
+                    if (priceData[id] && priceData[id].usd) {
+                        this.prices[symbol] = priceData[id].usd;
                     }
                 });
 
+                if (rateResponse.ok) {
+                    const rateData = await rateResponse.json();
+                    if (rateData['usd-coin']) {
+                        if (rateData['usd-coin'].eur) this.exchangeRates.EUR = rateData['usd-coin'].eur;
+                        if (rateData['usd-coin'].gbp) this.exchangeRates.GBP = rateData['usd-coin'].gbp;
+                    }
+                }
+
                 this.lastFetch = now;
-                console.log('Prices refreshed from CoinGecko:', this.prices);
+                console.log('Prices refreshed. Rates:', this.exchangeRates);
             } catch (error) {
                 console.error('Failed to refresh prices:', error);
-                // Fallback to existing or hardcoded prices on error
             } finally {
                 this.isFetching = false;
                 this.refreshPromise = null;
@@ -82,7 +99,7 @@ export class PriceService {
             this.refreshPrices();
         }
 
-        // Return from cache
+        // Return USD price from cache
         return this.prices[cleanSymbol] || 0;
     }
 
@@ -104,14 +121,27 @@ export class PriceService {
         return result;
     }
 
-    // Helper to format currency
-    formatCurrency(value: number): string {
-        return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Helper to format currency from a USD base value
+    formatCurrency(usdValue: number): string {
+        const rate = this.exchangeRates[this.currentCurrency] || 1;
+        const amount = usdValue * rate;
+        const symbols: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", MOVE: "" };
+        const symbol = symbols[this.currentCurrency] || "$";
+
+        return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // Helper to format value
-    formatValue(amount: number, price: number): string {
-        return this.formatCurrency(amount * price);
+    // Helper to format a value that is already converted to the current currency
+    formatConvertedValue(value: number): string {
+        const symbols: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", MOVE: "" };
+        const symbol = symbols[this.currentCurrency] || "$";
+        return `${symbol}${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    // Helper to format value from amount and a USD price
+    formatValue(amount: number, usdPrice: number): string {
+        const usdValue = amount * usdPrice;
+        return this.formatCurrency(usdValue);
     }
 }
 

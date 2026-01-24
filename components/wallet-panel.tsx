@@ -8,7 +8,9 @@ import { toast } from "sonner";
 import { fetchPortfolio, PortfolioData } from "@/lib/portfolio-service";
 import { priceService } from "@/lib/price-service";
 import { useNetwork } from "@/context/network-context";
+import { useCurrency } from "@/context/currency-context";
 import { MOVEMENT_NETWORKS } from "@/config/networks";
+
 
 interface WalletPanelProps {
     isOpen: boolean;
@@ -22,6 +24,8 @@ export function WalletPanel({ isOpen, onClose }: WalletPanelProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [isCopied, setIsCopied] = useState(false);
     const { activeRpc, refreshKey } = useNetwork();
+    const { currency } = useCurrency();
+
 
     const address = account?.address?.toString() || "";
     const shortAddress = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : "";
@@ -56,7 +60,9 @@ export function WalletPanel({ isOpen, onClose }: WalletPanelProps) {
         const loadData = async () => {
             setIsLoading(true);
             try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const currentNetwork = Object.values(MOVEMENT_NETWORKS).find((net: any) =>
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     net.rpcEndpoints.some((rpc: any) => rpc.url === activeRpc)
                 ) || MOVEMENT_NETWORKS.mainnet;
 

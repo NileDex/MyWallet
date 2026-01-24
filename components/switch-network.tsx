@@ -7,15 +7,15 @@ import { toast } from "sonner";
 
 export function SwitchNetwork() {
   const { network, wallet } = useWallet();
-  
+
   // Determine current network type - use chain IDs as primary detection
   const isMovementMainnet = network?.chainId === 126;
   const isMovementTestnet = network?.chainId === 250;
   const isMovementNetwork = isMovementMainnet || isMovementTestnet;
   const isNightly = wallet?.name?.toLowerCase().includes("nightly");
 
-  
-  
+
+
   const handleSwitchNetwork = async (targetNetwork: "mainnet" | "testnet") => {
     const networkName = targetNetwork === "mainnet" ? "Movement Mainnet" : "Movement Testnet";
     const loadingToast = toast.loading(`Switching to ${networkName}...`);
@@ -23,16 +23,18 @@ export function SwitchNetwork() {
     try {
       // Movement Network chain IDs
       const chainId = targetNetwork === "mainnet" ? 126 : 250;
-      
+
       // Check if we're using Nightly wallet
       if (isNightly && typeof window !== "undefined") {
         // Use Nightly's direct API
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((window as any).nightly?.aptos?.changeNetwork) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (window as any).nightly.aptos.changeNetwork({
             chainId,
             name: "custom"
           });
-          
+
           // Give some time for the network state to update
           setTimeout(() => {
             toast.success(`Switched to ${networkName}`, {
@@ -42,11 +44,12 @@ export function SwitchNetwork() {
           return;
         }
       }
-      
+
       // No fallback - only Nightly supports Movement network switching
       toast.error("Network switching not supported. Please use Nightly wallet for network switching.", {
         id: loadingToast,
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMessage = err.message || `Failed to switch to ${networkName}`;
       toast.error(errorMessage, {
@@ -74,7 +77,7 @@ export function SwitchNetwork() {
             </p>
           )}
         </div>
-        
+
         {isNightly ? (
           <div className="flex flex-col gap-2">
             {/* If not on Movement network, show both buttons */}
@@ -107,7 +110,7 @@ export function SwitchNetwork() {
                     Switch to Movement Mainnet
                   </Button>
                 )}
-                
+
                 {/* Show Testnet button if on Movement mainnet */}
                 {isMovementMainnet && (
                   <Button

@@ -11,7 +11,10 @@ import {
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNetwork } from "@/context/network-context";
+import { useCurrency, Currency } from "@/context/currency-context";
+import { priceService } from "@/lib/price-service";
 import { MOVEMENT_NETWORKS } from "@/config/networks";
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -21,9 +24,17 @@ import {
 
 export function SettingsModal({ children }: { children: React.ReactNode }) {
     const { activeRpc, setActiveRpc } = useNetwork();
+    const { currency, setCurrency } = useCurrency();
     const [customRpc, setCustomRpc] = useState("");
-    const [currency, setCurrency] = useState("MOVE");
     const [explorer, setExplorer] = useState(MOVEMENT_NETWORKS.mainnet.explorers[0]);
+
+    const handleCurrencyChange = (curr: Currency) => {
+        setCurrency(curr);
+        priceService.setCurrency(curr);
+    };
+
+
+
 
     const networks = MOVEMENT_NETWORKS.mainnet.rpcEndpoints;
     const explorers = MOVEMENT_NETWORKS.mainnet.explorers;
@@ -59,10 +70,11 @@ export function SettingsModal({ children }: { children: React.ReactNode }) {
                                     </div>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="bg-[#1a1b1f] border-white/5 rounded-none p-0 min-w-[120px]">
-                                    {["MOVE", "USD", "EUR"].map((curr) => (
+                                    {["MOVE", "USD", "EUR", "GBP"].map((curr) => (
+
                                         <DropdownMenuItem
                                             key={curr}
-                                            onClick={() => setCurrency(curr)}
+                                            onClick={() => handleCurrencyChange(curr as Currency)}
                                             className="text-xs font-mono text-white hover:bg-white hover:text-black rounded-none cursor-pointer px-3 py-2"
                                         >
                                             {curr}
@@ -75,6 +87,7 @@ export function SettingsModal({ children }: { children: React.ReactNode }) {
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-muted-foreground font-mono">Preferred Explorer</span>
                             <DropdownMenu>
+
                                 <DropdownMenuTrigger asChild>
                                     <div className="flex items-center gap-2 bg-[#242424] px-3 py-1.5 rounded-none border-none cursor-pointer min-w-[120px] justify-between group h-8">
                                         <span className="text-xs font-mono text-white truncate max-w-[150px]">{explorer.name}</span>

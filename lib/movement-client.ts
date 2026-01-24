@@ -417,6 +417,7 @@ class MovementIndexerClient {
      */
     async getUserOwnedObjects(userAddress: string): Promise<MoveObject[]> {
         // 1. Fetch all objects owned by the user
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const objectsData = await this.executeQuery<{ current_objects: any[] }>(
             GET_USER_OBJECTS,
             { ownerAddress: userAddress.toString() }

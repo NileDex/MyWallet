@@ -69,13 +69,14 @@ export function SignMessage() {
       toast.success(
         <div className="flex flex-col gap-2">
           <p>Message signed successfully!</p>
-          <p className="text-xs opacity-75">Message: "{message}"</p>
+          <p className="text-xs opacity-75">Message: &quot;{message}&quot;</p>
         </div>,
         {
           id: loadingToast,
           duration: 5000,
         }
       );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMessage = err.message || "Failed to sign message";
       toast.error(errorMessage, {
@@ -93,7 +94,7 @@ export function SignMessage() {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-muted-foreground">
-          Sign a "gmove" message with your wallet.
+          Sign a &quot;gmove&quot; message with your wallet.
         </p>
 
         <div className="space-y-2">

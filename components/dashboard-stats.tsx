@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { PieChart, Activity, Info, ChevronRight } from "lucide-react";
 import { PositionsTable } from "./positions-table";
 import { ActivityTable } from "./activity-table";
+import { AddressBook } from "./address-book";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
+
 import { useNetwork } from "@/context/network-context";
 import { MOVEMENT_NETWORKS } from "@/config/networks";
 import { MovementIndexerClient, ChartDataPoint } from "@/lib/movement-client";
@@ -16,6 +18,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { priceService } from "@/lib/price-service";
+import { useCurrency } from "@/context/currency-context";
+
 
 interface DashboardAsset {
     name: string;
@@ -136,8 +140,12 @@ function MultiColorProgressBar({ items }: { items: { percentage: number, color: 
 export function DashboardStats() {
     const { account } = useWallet();
     const { activeRpc, refreshKey } = useNetwork();
+    const { currency } = useCurrency();
     const [breakdownType, setBreakdownType] = useState<"tokens" | "platforms">("tokens");
     const [mainTab, setMainTab] = useState<"positions" | "activity">("positions");
+    const [viewTab, setViewTab] = useState<"dashboard" | "addressbook">("dashboard");
+
+
 
     const [moveData, setMoveData] = useState<{ balance: string, iconUri: string | null } | null>(null);
     const [assets, setAssets] = useState<DashboardAsset[]>([]);
@@ -145,6 +153,7 @@ export function DashboardStats() {
     const [hasError, setHasError] = useState(false);
 
     // Modal state
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [selectedGroup, setSelectedGroup] = useState<{ title: string, items: any[], color: string } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
@@ -156,9 +165,32 @@ export function DashboardStats() {
     const [netWorth, setNetWorth] = useState("$0.00");
     const [holdingsPnL, setHoldingsPnL] = useState("-$0.00");
 
+    // Address Book Integration
+    const [savedAddresses, setSavedAddresses] = useState<Array<{ id: number, username: string, address: string }>>([]);
+    const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Load saved addresses from IndexedDB
+        const loadSavedAddresses = async () => {
+            try {
+                const { addressBookDB } = await import("@/lib/addressbook-db");
+                const addresses = await addressBookDB.getAllAddresses();
+                setSavedAddresses(addresses.map(a => ({
+                    id: a.id!,
+                    username: a.username,
+                    address: a.address
+                })));
+            } catch (error) {
+                console.error("Failed to load saved addresses:", error);
+            }
+        };
+        loadSavedAddresses();
+    }, []);
+
     useEffect(() => {
         const fetchData = async () => {
-            if (!account?.address) return;
+            const addressToFetch = selectedAddress || account?.address?.toString();
+            if (!addressToFetch) return;
 
             setIsLoading(true);
             setHasError(false);
@@ -168,10 +200,19 @@ export function DashboardStats() {
                 ) || MOVEMENT_NETWORKS.mainnet;
 
                 const client = new MovementIndexerClient(currentNetwork.indexerUrl);
-                const [moveResponse, allAssets] = await Promise.all([
-                    client.getMoveBalance(account.address.toString()),
-                    client.getFungibleAssetsFormatted(account.address.toString())
+
+                // Add timeout to prevent hanging
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Request timed out')), 10000)
+                );
+
+                const dataPromise = Promise.all([
+                    client.getMoveBalance(addressToFetch),
+                    client.getFungibleAssetsFormatted(addressToFetch)
                 ]);
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const [moveResponse, allAssets] = await Promise.race([dataPromise, timeoutPromise]) as [any, any];
 
                 if (moveResponse) {
                     setMoveData({
@@ -183,7 +224,8 @@ export function DashboardStats() {
                 }
 
                 // Calculate Net Worth and populate assets with prices
-                const assetsWithVals = await Promise.all(allAssets.map(async (asset) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const assetsWithVals = await Promise.all(allAssets.map(async (asset: any) => {
                     const price = await priceService.getPrice(asset.symbol);
                     const amount = Number(asset.balanceFormatted.replace(/,/g, ''));
                     const val = amount * price;
@@ -209,7 +251,7 @@ export function DashboardStats() {
         };
 
         fetchData();
-    }, [account?.address, activeRpc, refreshKey]);
+    }, [account?.address, activeRpc, refreshKey, selectedAddress]);
 
     // Calculate breakdown for visual display
     const calculateBreakdown = () => {
@@ -364,156 +406,215 @@ export function DashboardStats() {
                 items={selectedGroup?.items || []}
                 color={selectedGroup?.color || "#fff"}
             />
-            <div className="flex overflow-x-auto snap-x snap-mandatory md:grid md:grid-cols-2 gap-4 pb-2 md:pb-0 scrollbar-hide px-4 md:px-0">
-                <div className="min-w-full md:min-w-0 snap-center border border-white/5 h-[300px] rounded-none p-6 flex flex-col justify-between relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 pointer-events-none">
-                        <img src="/greek_moveus1.PNG" alt="Greek Moveus" className="w-full h-full object-contain" />
-                    </div>
 
-                    <div className="space-y-1 relative z-10">
-                        <p className="text-muted-foreground text-[10px] font-mono uppercase tracking-widest opacity-60">Net Worth</p>
-                        <div className="flex items-center gap-3">
-                            <h3 className="text-3xl font-bold font-mono text-white">{netWorth}</h3>
-                            <div className="flex items-center gap-2 bg-white/5 px-2 py-1 border border-white/5 self-end mb-1">
-                                <div className="w-4 h-4 border border-white/10 flex items-center justify-center text-[10px] font-mono text-white/40 overflow-hidden">
-                                    {(moveData?.iconUri || (moveData && "https://explorer.movementnetwork.xyz/logo.png")) ? (
-                                        <img src={moveData?.iconUri || "https://explorer.movementnetwork.xyz/logo.png"} alt="MOVE" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
+            {/* View Tabs */}
+            <div className="px-4 md:px-0">
+                <div className="inline-flex bg-[#1a1b1f] p-1 rounded-none border border-white/5">
+                    <button
+                        onClick={() => setViewTab("dashboard")}
+                        className={`px-6 py-2 text-sm font-mono uppercase tracking-wider transition-none ${viewTab === 'dashboard'
+                            ? 'bg-[#0c0d11] text-white'
+                            : 'text-muted-foreground hover:text-white'
+                            }`}
+                    >
+                        Dashboard
+                    </button>
+                    <button
+                        onClick={() => setViewTab("addressbook")}
+                        className={`px-6 py-2 text-sm font-mono uppercase tracking-wider transition-none ${viewTab === 'addressbook'
+                            ? 'bg-[#0c0d11] text-white'
+                            : 'text-muted-foreground hover:text-white'
+                            }`}
+                    >
+                        Address Book
+                    </button>
+                </div>
+            </div>
+
+            {viewTab === 'dashboard' ? (
+                <>
+                    {/* Address Selector */}
+                    {savedAddresses.length > 0 && (
+                        <div className="px-4 md:px-0 mb-4">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Viewing:</span>
+                                <select
+                                    value={selectedAddress || account?.address?.toString() || ""}
+                                    onChange={(e) => setSelectedAddress(e.target.value === account?.address?.toString() ? null : e.target.value)}
+                                    className="bg-[#1a1b1f] border border-white/10 px-3 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-white/20 rounded-none cursor-pointer hover:bg-[#242424] transition-colors"
+                                >
+                                    {account?.address && (
+                                        <option value={account.address.toString()}>
+                                            My Wallet ({account.address.toString().slice(0, 6)}...{account.address.toString().slice(-4)})
+                                        </option>
                                     )}
-                                </div>
-                                <span className="text-white text-xs font-mono">
-                                    {isLoading ? "..." : `${moveData?.balance || "0.00"} MOVE`}
-                                </span>
+                                    {savedAddresses.map((addr) => (
+                                        <option key={addr.id} value={addr.address}>
+                                            {addr.username} ({addr.address.slice(0, 6)}...{addr.address.slice(-4)})
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
-                    </div>
+                    )}
 
-                    <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-white/5">
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                                <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider opacity-60">PnL (Estimate)</span>
+                    <div className="flex overflow-x-auto snap-x snap-mandatory md:grid md:grid-cols-2 gap-4 pb-2 md:pb-0 scrollbar-hide px-4 md:px-0">
+
+                        <div className="min-w-full md:min-w-0 snap-center border border-white/5 h-[300px] rounded-none p-6 flex flex-col justify-between relative overflow-hidden">
+                            <div className="absolute top-4 right-4 w-36 h-36 pointer-events-none opacity-90 hover:opacity-100 transition-opacity">
+                                <img src="/greek_moveus1.PNG" alt="Greek Moveus" className="w-full h-full object-contain drop-shadow-lg" />
                             </div>
-                            <p className="text-sm font-mono text-pink-500">{holdingsPnL}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider opacity-60">Claimable</span>
-                            <p className="text-sm font-mono text-white">$0.00</p>
-                        </div>
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 opacity-60">
-                                <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
-                                <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">MOVE Holdings</span>
-                            </div>
-                            <p className="text-xs font-mono text-white">{isLoading ? "..." : moveData?.balance || "0.00"}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 opacity-60">
-                                <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
-                                <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">MOVE Staked</span>
-                            </div>
-                            <p className="text-xs font-mono text-white">0.00%</p>
-                        </div>
-                    </div>
-                </div>
 
-                <div className="min-w-full md:min-w-0 snap-center border border-white/5 h-[300px] rounded-none flex flex-col overflow-hidden">
-                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <PieChart className="w-3 h-3 text-white/40" />
-                            <span className="text-[10px] font-mono text-white uppercase tracking-widest font-bold">Breakdown</span>
-                        </div>
-
-                        <div className="flex bg-[#1a1b1f] p-1 rounded-none scale-75 origin-right">
-                            <button
-                                onClick={() => setBreakdownType("tokens")}
-                                className={`px-3 py-1 text-[10px] font-mono transition-none ${breakdownType === 'tokens' ? 'bg-[#242424] text-white' : 'text-muted-foreground'}`}
-                            >
-                                Tokens
-                            </button>
-                            <button
-                                onClick={() => setBreakdownType("platforms")}
-                                className={`px-3 py-1 text-[10px] font-mono transition-none ${breakdownType === 'platforms' ? 'bg-[#242424] text-white' : 'text-muted-foreground'}`}
-                            >
-                                Platforms
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 flex flex-col p-6">
-                        <div className="flex-1 flex flex-col">
-                            <div className="flex-1 flex flex-wrap gap-x-6 gap-y-4 content-start">
-                                {breakdown.map((item: any, i: number) => (
-                                    <TokenItem
-                                        key={i}
-                                        name={item.name}
-                                        symbol={item.symbol}
-                                        iconUri={item.iconUri}
-                                        percentage={item.percentageString || `${(item.percentage || 0).toFixed(2)}%`}
-                                        color={item.color || "#ffffff"}
-                                        isOthers={item.isOthers}
-                                        onClick={() => handleGroupClick(item)}
-                                    />
-                                ))}
-                                {breakdown.length === 0 && (
-                                    <div className="w-full flex justify-center py-8 opacity-20">
-                                        <p className="text-[10px] font-mono uppercase tracking-widest">{isLoading ? "Loading breakdown..." : "No tokens found"}</p>
+                            <div className="space-y-3 relative z-10">
+                                <p className="text-muted-foreground text-[10px] font-mono uppercase tracking-widest opacity-60">Net Worth</p>
+                                <h3 className="text-3xl font-bold font-mono text-white">{netWorth}</h3>
+                                <div className="flex items-center gap-2 bg-white/5 px-2 py-1 border border-white/5 w-fit">
+                                    <div className="w-4 h-4 border border-white/10 flex items-center justify-center text-[10px] font-mono text-white/40 overflow-hidden">
+                                        {(moveData?.iconUri || (moveData && "https://explorer.movementnetwork.xyz/logo.png")) ? (
+                                            <img src={moveData?.iconUri || "https://explorer.movementnetwork.xyz/logo.png"} alt="MOVE" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
+                                        )}
                                     </div>
-                                )}
+                                    <span className="text-white text-xs font-mono">
+                                        {isLoading ? "..." : `${moveData?.balance || "0.00"} MOVE`}
+                                    </span>
+                                </div>
                             </div>
 
-                            <div className="mt-auto space-y-2">
-                                <MultiColorProgressBar
-                                    items={breakdown.map((item: DashboardAsset) => ({
-                                        percentage: item.percentage || 0,
-                                        color: item.color || "#ffffff"
-                                    }))}
-                                />
-                                <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest leading-none">
-                                    {assets.length} {assets.length === 1 ? 'token' : 'tokens'} detected
-                                </p>
+                            <div className="grid grid-cols-2 gap-y-4 pt-4 border-t border-white/5">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider opacity-60">PnL (Estimate)</span>
+                                    </div>
+                                    <p className="text-sm font-mono text-pink-500">{holdingsPnL}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider opacity-60">Claimable</span>
+                                    <p className="text-sm font-mono text-white">{priceService.formatCurrency(0)}</p>
+
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 opacity-60">
+                                        <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
+                                        <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">MOVE Holdings</span>
+                                    </div>
+                                    <p className="text-xs font-mono text-white">{isLoading ? "..." : moveData?.balance || "0.00"}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-1.5 opacity-60">
+                                        <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
+                                        <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">MOVE Staked</span>
+                                    </div>
+                                    <p className="text-xs font-mono text-white">0.00%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="min-w-full md:min-w-0 snap-center border border-white/5 h-[300px] rounded-none flex flex-col overflow-hidden">
+                            <div className="p-4 border-b border-white/5 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <PieChart className="w-3 h-3 text-white/40" />
+                                    <span className="text-[10px] font-mono text-white uppercase tracking-widest font-bold">Breakdown</span>
+                                </div>
+
+                                <div className="flex bg-[#1a1b1f] p-1 rounded-none scale-75 origin-right">
+                                    <button
+                                        onClick={() => setBreakdownType("tokens")}
+                                        className={`px-3 py-1 text-[10px] font-mono transition-none ${breakdownType === 'tokens' ? 'bg-[#242424] text-white' : 'text-muted-foreground'}`}
+                                    >
+                                        Tokens
+                                    </button>
+                                    <button
+                                        onClick={() => setBreakdownType("platforms")}
+                                        className={`px-3 py-1 text-[10px] font-mono transition-none ${breakdownType === 'platforms' ? 'bg-[#242424] text-white' : 'text-muted-foreground'}`}
+                                    >
+                                        Platforms
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 flex flex-col p-6">
+                                <div className="flex-1 flex flex-col">
+                                    <div className="flex-1 flex flex-wrap gap-x-6 gap-y-4 content-start">
+                                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                        {breakdown.map((item: any, i: number) => (
+                                            <TokenItem
+                                                key={i}
+                                                name={item.name}
+                                                symbol={item.symbol}
+                                                iconUri={item.iconUri}
+                                                percentage={item.percentageString || `${(item.percentage || 0).toFixed(2)}%`}
+                                                color={item.color || "#ffffff"}
+                                                isOthers={item.isOthers}
+                                                onClick={() => handleGroupClick(item)}
+                                            />
+                                        ))}
+                                        {breakdown.length === 0 && (
+                                            <div className="w-full flex justify-center py-8 opacity-20">
+                                                <p className="text-[10px] font-mono uppercase tracking-widest">{isLoading ? "Loading breakdown..." : "No tokens found"}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-auto space-y-2">
+                                        <MultiColorProgressBar
+                                            items={breakdown.map((item: DashboardAsset) => ({
+                                                percentage: item.percentage || 0,
+                                                color: item.color || "#ffffff"
+                                            }))}
+                                        />
+                                        <p className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest leading-none">
+                                            {assets.length} {assets.length === 1 ? 'token' : 'tokens'} detected
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div className="space-y-4 px-4 md:px-0">
-                <div className="flex gap-6 border-b border-white/5 pt-2">
-                    <button
-                        onClick={() => setMainTab("positions")}
-                        className={`pb-2 text-xs font-mono relative uppercase tracking-widest transition-none ${mainTab === 'positions' ? 'text-white' : 'text-muted-foreground opacity-60 hover:opacity-100'}`}
-                    >
-                        Positions
-                        {mainTab === 'positions' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
-                    </button>
-                    <button
-                        onClick={() => setMainTab("activity")}
-                        className={`pb-2 text-xs font-mono relative uppercase tracking-widest transition-none ${mainTab === 'activity' ? 'text-white' : 'text-muted-foreground opacity-60 hover:opacity-100'}`}
-                    >
-                        Activity
-                        {mainTab === 'activity' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
-                    </button>
-                </div>
+                    <div className="space-y-4 px-4 md:px-0">
+                        <div className="flex gap-6 border-b border-white/5 pt-2">
+                            <button
+                                onClick={() => setMainTab("positions")}
+                                className={`pb-2 text-xs font-mono relative uppercase tracking-widest transition-none ${mainTab === 'positions' ? 'text-white' : 'text-muted-foreground opacity-60 hover:opacity-100'}`}
+                            >
+                                Positions
+                                {mainTab === 'positions' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
+                            </button>
+                            <button
+                                onClick={() => setMainTab("activity")}
+                                className={`pb-2 text-xs font-mono relative uppercase tracking-widest transition-none ${mainTab === 'activity' ? 'text-white' : 'text-muted-foreground opacity-60 hover:opacity-100'}`}
+                            >
+                                Activity
+                                {mainTab === 'activity' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
+                            </button>
+                        </div>
 
-                {mainTab === 'positions' ? (
-                    <div className="space-y-4">
-                        <PositionsTable />
+                        {mainTab === 'positions' ? (
+                            <div className="space-y-4">
+                                <PositionsTable address={selectedAddress || account?.address?.toString() || ""} />
+                            </div>
+                        ) : (
+                            <ActivityTable address={selectedAddress || account?.address?.toString() || ""} />
+                        )}
                     </div>
-                ) : (
-                    <ActivityTable />
-                )}
-            </div>
 
-            {selectedGroup && (
-                <BreakdownDetailModal
-                    isOpen={isModalOpen}
-                    onOpenChange={setIsModalOpen}
-                    title={selectedGroup.title}
-                    items={selectedGroup.items}
-                    color={selectedGroup.color}
-                />
+                    {selectedGroup && (
+                        <BreakdownDetailModal
+                            isOpen={isModalOpen}
+                            onOpenChange={setIsModalOpen}
+                            title={selectedGroup.title}
+                            items={selectedGroup.items}
+                            color={selectedGroup.color}
+                        />
+                    )}
+                </>
+            ) : (
+                /* Address Book View */
+                <AddressBook />
             )}
+
         </div>
     );
 }

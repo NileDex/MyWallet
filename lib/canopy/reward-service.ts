@@ -42,10 +42,12 @@ interface AptosTransaction {
 
 interface AptosEvent {
     type: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any;
     sequence_number: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getEventsUsingUserTransactions(userAddress: string): Promise<any[]> {
     console.log(`Fetching user transactions for ${userAddress}...`);
 
@@ -78,6 +80,7 @@ async function getEventsUsingUserTransactions(userAddress: string): Promise<any[
     console.log(`Found ${allTransactions.length} total user transactions`);
 
     // Filter for reward claim events
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rewardEvents: any[] = [];
 
     allTransactions.forEach(tx => {
@@ -100,6 +103,7 @@ async function getEventsUsingUserTransactions(userAddress: string): Promise<any[
     return rewardEvents;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function processEvents(events: any[], userAddress: string): Promise<{ rewardTotals: Record<string, number>, claimHistory: RewardClaim[] }> {
     const rewardTotals: Record<string, number> = {};
     const claimHistory: RewardClaim[] = [];

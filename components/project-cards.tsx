@@ -5,6 +5,7 @@ import { User, ExternalLink } from "lucide-react";
 import projectsData from "../data/projects.json";
 
 // Typed projects data to help with module resolution
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const projects: any[] = projectsData;
 
 interface Project {
@@ -13,7 +14,7 @@ interface Project {
     description: string;
     url: string;
     logo: string;
-    balance: string;
+    balance?: string;
 }
 
 export function ProjectCards({ orientation = 'horizontal' }: { orientation?: 'horizontal' | 'vertical' }) {
