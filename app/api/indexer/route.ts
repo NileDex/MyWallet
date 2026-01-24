@@ -8,6 +8,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ errors: [{ message: "Endpoint is required" }] }, { status: 400 });
         }
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 45000);
+
         const response = await fetch(endpoint, {
             method: "POST",
             headers: {
@@ -17,7 +20,9 @@ export async function POST(req: NextRequest) {
                 "Origin": "https://explorer.movementnetwork.xyz"
             },
             body: JSON.stringify({ query, variables }),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         const data = await response.json();
         return NextResponse.json(data);

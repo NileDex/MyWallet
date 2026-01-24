@@ -29,6 +29,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
         if (errorMsg.includes("rejected the request")) {
           toast.info("Connection request canceled");
+        } else if (
+          errorMsg.includes("Failed to connect to MetaMask") ||
+          errorMsg.includes("Object.connect")
+        ) {
+          // Ignore irrelevant MetaMask extension errors
+          console.warn("Ignored MetaMask conflict error:", errorMsg);
         } else {
           console.error("Wallet error:", error);
           toast.error(errorMsg);

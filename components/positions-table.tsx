@@ -1,12 +1,13 @@
 "use client";
+// Force recompile
 
 import { useState, useEffect } from "react";
-import { PieChart, Activity, Info, ChevronRight, Loader2, AlertTriangle, ExternalLink } from "lucide-react";
+import { PieChart, Activity, Info, ChevronRight, Loader2, AlertTriangle, ExternalLink, Zap } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { MovementIndexerClient } from "@/lib/movement-client";
 import { useNetwork } from "@/context/network-context";
 import { MOVEMENT_NETWORKS } from "@/config/networks";
-import { CanopyTable } from "./canopy-table";
+import { GorillaTable } from "./gorilla-table";
 import projectsData from "../data/projects.json";
 
 import { priceService } from "@/lib/price-service";
@@ -126,9 +127,9 @@ export function PositionsTable({ address }: { address?: string }) {
                 ) || MOVEMENT_NETWORKS.mainnet;
 
                 const client = new MovementIndexerClient(currentNetwork.indexerUrl);
-
+                // Add timeout to prevent hanging (increased to 30s)
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Request timed out')), 10000)
+                    setTimeout(() => reject(new Error('Indexer Request Timeout: Asset fetch took longer than 30 seconds')), 30000)
                 );
 
                 const fetchedAssets = await Promise.race([
@@ -162,8 +163,8 @@ export function PositionsTable({ address }: { address?: string }) {
 
 
                 setAssets(assetWithPrices);
-            } catch (error) {
-                console.error("Failed to fetch assets:", error);
+            } catch (error: any) {
+                console.error(`[PositionsTable] Failed to fetch assets: ${error.message || error}`);
                 setHasError(true);
             } finally {
                 setIsLoading(false);
@@ -175,7 +176,8 @@ export function PositionsTable({ address }: { address?: string }) {
 
     // Split assets
     const positionTokens = assets.filter(a => a.name === 'Position ID Token' || a.name.includes('Position ID'));
-    const otherTokens = assets.filter(a => !positionTokens.includes(a));
+    const gorillaTokens = assets.filter(a => a.symbol === 'BANANA' || a.name.toLowerCase().includes('gorilla') || a.name.toLowerCase().includes('banana'));
+    const otherTokens = assets.filter(a => !positionTokens.includes(a) && !gorillaTokens.includes(a));
 
     if (!isMounted) return null;
 
@@ -273,29 +275,29 @@ export function PositionsTable({ address }: { address?: string }) {
                 />
             )}
 
-            {/* Canopy Section */}
-            <CanopySection />
+            {/* Gorilla Moverz Section */}
+            <GorillaMoverzSection tokens={gorillaTokens} />
         </div>
     );
 }
 
-function CanopySection() {
+function GorillaMoverzSection({ tokens }: { tokens: AssetData[] }) {
     const [isProjectExpanded, setIsProjectExpanded] = useState(true);
     const [isTableExpanded, setIsTableExpanded] = useState(true);
-    const canopyProject = projectsData.find(p => p.id === 'canopy');
+    const gorillaProject = projectsData.find(p => p.id === 'canopy');
 
     return (
         <div className="space-y-0.5">
-            {/* Top Level Project Header (Canopy) */}
+            {/* Top Level Project Header (Gorilla Moverz) */}
             <div
                 onClick={() => setIsProjectExpanded(!isProjectExpanded)}
                 className="bg-[#1a1b1f] border border-white/5 p-3 flex items-center justify-between cursor-pointer hover:bg-white/[0.03] transition-none"
             >
                 <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full overflow-hidden flex items-center justify-center bg-black/20">
-                        <img src={canopyProject?.logo} alt="Canopy" className="w-full h-full object-cover" />
+                        <img src={gorillaProject?.logo} alt="Gorilla Moverz" className="w-full h-full object-cover" />
                     </div>
-                    <span className="text-sm font-mono font-bold text-white uppercase tracking-wider">Canopy</span>
+                    <span className="text-sm font-mono font-bold text-white uppercase tracking-wider">Gorilla Moverz</span>
                 </div>
                 <div className="flex items-center gap-4">
                     <ChevronRight className={`w-4 h-4 text-white transition-transform duration-200 ${isProjectExpanded ? 'rotate-[270deg]' : 'rotate-90'}`} />
@@ -318,17 +320,30 @@ function CanopySection() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-mono text-white">Protocol</span>
-                                {canopyProject && (
-                                    <a
-                                        href={canopyProject.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="p-0.5 hover:bg-white/10 rounded-sm transition-colors group/link"
-                                        title="Launch App"
-                                    >
-                                        <ExternalLink className="w-3 h-3 text-white/40 group-hover/link:text-white" />
-                                    </a>
+                                {gorillaProject && (
+                                    <div className="flex items-center gap-1">
+                                        <a
+                                            href={gorillaProject.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="p-0.5 hover:bg-white/10 rounded-sm transition-colors group/link"
+                                            title="Launch App"
+                                        >
+                                            <ExternalLink className="w-3 h-3 text-white/40 group-hover/link:text-white" />
+                                        </a>
+                                        <a
+                                            href="https://farm.gorilla-moverz.xyz/farm"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="px-1.5 py-0.5 bg-yellow-400/10 hover:bg-yellow-400/20 border border-yellow-400/20 rounded-sm transition-colors group/mine flex items-center gap-1"
+                                            title="Mine for Yield"
+                                        >
+                                            <Zap className="w-2.5 h-2.5 text-yellow-400" />
+                                            <span className="text-[9px] font-mono font-bold text-yellow-400 uppercase">Mine</span>
+                                        </a>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -340,7 +355,7 @@ function CanopySection() {
 
                     {isTableExpanded && (
                         <div className="pt-0.5">
-                            <CanopyTable />
+                            <GorillaTable extraAssets={tokens} />
                         </div>
                     )}
                 </div>

@@ -201,9 +201,9 @@ export function DashboardStats() {
 
                 const client = new MovementIndexerClient(currentNetwork.indexerUrl);
 
-                // Add timeout to prevent hanging
+                // Add timeout to prevent hanging (increased to 30s)
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Request timed out')), 10000)
+                    setTimeout(() => reject(new Error('Indexer Request Timeout: Request took longer than 30 seconds')), 30000)
                 );
 
                 const dataPromise = Promise.all([
@@ -242,8 +242,8 @@ export function DashboardStats() {
                 setHoldingsPnL(`-${priceService.formatCurrency(totalVal * 0.05)}`); // Example PnL calculation
                 setAssets(assetsWithVals);
 
-            } catch (error) {
-                console.error("Failed to fetch dashboard data:", error);
+            } catch (error: any) {
+                console.error(`[DashboardStats] Failed to fetch data: ${error.message || error}`);
                 setHasError(true);
             } finally {
                 setIsLoading(false);

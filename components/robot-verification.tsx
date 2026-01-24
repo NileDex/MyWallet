@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 
 
@@ -14,6 +15,21 @@ interface RobotVerificationProps {
 export function RobotVerification({ onVerify }: RobotVerificationProps) {
     const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "";
 
+    useEffect(() => {
+        // Check session storage on mount
+        const savedToken = sessionStorage.getItem("robot_verification_token");
+        if (savedToken) {
+            onVerify(savedToken);
+        }
+    }, [onVerify]);
+
+    const handleVerify = (token: string | null) => {
+        if (token) {
+            sessionStorage.setItem("robot_verification_token", token);
+        }
+        onVerify(token);
+    };
+
     return (
         <div className="flex flex-col items-center justify-center p-4 min-h-[400px]">
             <Card className="w-full max-w-md bg-black/40 border-white/10 backdrop-blur-sm rounded-none border-t-2 border-t-white">
@@ -23,7 +39,7 @@ export function RobotVerification({ onVerify }: RobotVerificationProps) {
                         <div className="bg-white p-2 rounded-sm shadow-xl">
                             <ReCAPTCHA
                                 sitekey={siteKey}
-                                onChange={onVerify}
+                                onChange={handleVerify}
                                 theme="light"
                             />
                         </div>
