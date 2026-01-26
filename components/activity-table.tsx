@@ -200,6 +200,8 @@ export function ActivityTable({ address }: { address?: string }) {
     };
 
     useEffect(() => {
+        const controller = new AbortController();
+
         const fetchActivities = async () => {
             const targetAddress = address || account?.address?.toString();
             if (!targetAddress) return;
@@ -214,8 +216,7 @@ export function ActivityTable({ address }: { address?: string }) {
 
                 setExplorerUrl(currentNetwork.explorers[0].url);
 
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
 
                 const response = await fetch('/api/indexer', {
                     method: 'POST',
@@ -285,15 +286,21 @@ export function ActivityTable({ address }: { address?: string }) {
                 });
 
                 setActivities(formatted);
-            } catch (error) {
-                console.error('Error fetching activities:', error);
-                setHasError(true);
+            } catch (error: any) {
+                if (error.name !== 'AbortError') {
+                    console.error('Error fetching activities:', error);
+                    setHasError(true);
+                }
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchActivities();
+
+        return () => {
+            controller.abort();
+        };
     }, [address, account?.address, activeRpc]);
 
     const formatTime = (date: Date): string => {

@@ -72,6 +72,16 @@ export interface MoveObject {
     description?: string;
 }
 
+export interface StakingInfo {
+    poolAddress: string;
+    operatorAddress: string;
+    stakedAmount: string; // Octas
+    stakedAmountFormatted: string; // MOVE
+    rewardsPending: string; // Octas
+    rewardsPendingFormatted: string; // MOVE
+    status: string;
+}
+
 export interface GetUserObjectsResponse {
     current_objects: MoveObject[];
 }
@@ -86,9 +96,14 @@ import { GET_FUNGIBLE_ASSET_ACTIVITIES } from "@/components/balance-chart";
 
 class MovementIndexerClient {
     private endpoint: string;
+    private rpcEndpoint: string;
 
-    constructor(endpoint: string = "https://indexer.mainnet.movementnetwork.xyz/v1/graphql") {
+    constructor(
+        endpoint: string = "https://indexer.mainnet.movementnetwork.xyz/v1/graphql",
+        rpcEndpoint: string = "https://mainnet.movementnetwork.xyz/v1"
+    ) {
         this.endpoint = endpoint;
+        this.rpcEndpoint = rpcEndpoint;
     }
 
     /**
@@ -96,7 +111,8 @@ class MovementIndexerClient {
      */
     private async executeQuery<T>(
         query: string,
-        variables: Record<string, unknown> = {}
+        variables: Record<string, unknown> = {},
+        signal?: AbortSignal
     ): Promise<T> {
         try {
             // Route through our internal proxy to avoid CORS/Network issues
@@ -110,6 +126,7 @@ class MovementIndexerClient {
                     query,
                     variables,
                 }),
+                signal
             });
 
             if (!response.ok) {
@@ -128,7 +145,8 @@ class MovementIndexerClient {
             }
 
             return result.data;
-        } catch (error: unknown) {
+        } catch (error: any) {
+            if (error.name === 'AbortError') throw error;
             console.error("[MovementIndexerClient] Request failed:", error);
             throw error;
         }
@@ -138,11 +156,13 @@ class MovementIndexerClient {
      * Get all fungible assets (coins/tokens) for a user address
      */
     async getFungibleAssets(
-        userAddress: string
+        userAddress: string,
+        signal?: AbortSignal
     ): Promise<FungibleAssetBalance[]> {
         const data = await this.executeQuery<GetFungibleAssetsResponse>(
             GET_FUNGIBLE_ASSETS_DETAILED,
-            { userAddress: userAddress.toString() }
+            { userAddress: userAddress.toString() },
+            signal
         );
 
         return data.current_fungible_asset_balances;
@@ -151,8 +171,8 @@ class MovementIndexerClient {
     /**
      * Get fungible assets and format them for display
      */
-    async getFungibleAssetsFormatted(userAddress: string) {
-        const assets = await this.getFungibleAssets(userAddress);
+    async getFungibleAssetsFormatted(userAddress: string, signal?: AbortSignal) {
+        const assets = await this.getFungibleAssets(userAddress, signal);
 
         return assets.map((asset) => ({
             assetType: asset.asset_type,
@@ -197,7 +217,7 @@ class MovementIndexerClient {
     /**
      * Get MOVE token balance and metadata specifically using a direct query
      */
-    async getMoveBalance(userAddress: string) {
+    async getMoveBalance(userAddress: string, signal?: AbortSignal) {
         try {
             // Try direct fetch by asset type first (AptosCoin) 
             const data = await this.executeQuery<GetFungibleAssetsResponse>(
@@ -205,7 +225,8 @@ class MovementIndexerClient {
                 {
                     userAddress: userAddress.toString(),
                     assetType: "0x1::aptos_coin::AptosCoin"
-                }
+                },
+                signal
             );
 
             const balances = data.current_fungible_asset_balances;
@@ -226,21 +247,23 @@ class MovementIndexerClient {
             }
 
             // Fallback: search all assets for symbol "MOVE"
-            const allAssets = await this.getFungibleAssetsFormatted(userAddress);
+            const allAssets = await this.getFungibleAssetsFormatted(userAddress, signal);
             return allAssets.find(a =>
                 a.symbol.toLowerCase() === "move" ||
                 a.name.toLowerCase().includes("move")
             ) || null;
 
-        } catch (error) {
+        } catch (error: any) {
+            if (error.name === 'AbortError') throw error;
             console.error("Error fetching MOVE balance:", error);
             try {
-                const allAssets = await this.getFungibleAssetsFormatted(userAddress);
+                const allAssets = await this.getFungibleAssetsFormatted(userAddress, signal);
                 return allAssets.find(a =>
                     a.symbol.toLowerCase() === "move" ||
                     a.name.toLowerCase().includes("move")
                 ) || null;
-            } catch (fallbackError) {
+            } catch (fallbackError: any) {
+                if (fallbackError.name === 'AbortError') throw fallbackError;
                 console.error("Fallback fetch failed:", fallbackError);
                 return null;
             }
@@ -427,10 +450,97 @@ class MovementIndexerClient {
     }
 
     /**
+     * Get staking/delegation information for a user
+     */
+    async getStakingData(userAddress: string, poolAddress: string, signal?: AbortSignal): Promise<StakingInfo | null> {
+        try {
+            // Use view functions to get stake and rewards
+            // delegation_pool::get_stake(pool_address, delegator_address): (u64, u64, u64)
+            // returns (active, inactive, pending_withdrawal)
+            const stakeData = await this.executeViewFunction(
+                "0x1::delegation_pool::get_stake",
+                [poolAddress, userAddress],
+                [],
+                signal
+            );
+
+            // delegation_pool::get_owned_v1_pool(operator_address): address
+            // delegation_pool::operator_commission_percentage(pool_address): u64
+
+            if (!stakeData || !Array.isArray(stakeData)) return null;
+
+            const [active, inactive, pending] = stakeData.map(val => BigInt(val as string));
+            const totalStake = active + inactive + pending;
+
+            // Get pending rewards
+            // delegation_pool::get_pending_withdrawal(pool_address, delegator_address): u64
+            // Actually, rewards are usually added to active stake in Aptos/Movement
+            // but there is often a way to see pending rewards if they haven't been compounded or are separate.
+            // Using delegation_pool::get_stake is the primary way to see the balance.
+
+            return {
+                poolAddress,
+                operatorAddress: "", // Will be filled if needed or fetched
+                stakedAmount: totalStake.toString(),
+                stakedAmountFormatted: (Number(totalStake) / 1e8).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 }),
+                rewardsPending: "0", // Need specific function if rewards are separate
+                rewardsPendingFormatted: "0.00",
+                status: active > BigInt(0) ? "Active" : "Inactive"
+            };
+        } catch (error: any) {
+            if (error.name === 'AbortError') throw error;
+            console.error(`Error fetching staking data for ${poolAddress}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Execute a view function on the Movement RPC
+     */
+    private async executeViewFunction(
+        functionId: string,
+        args: any[],
+        typeArgs: string[] = [],
+        signal?: AbortSignal
+    ): Promise<any> {
+        try {
+            const response = await fetch(`${this.rpcEndpoint}/view`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    function: functionId,
+                    type_arguments: typeArgs,
+                    arguments: args,
+                }),
+                signal
+            });
+
+            if (!response.ok) {
+                throw new Error(`RPC View Error: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error: any) {
+            if (error.name === 'AbortError') throw error;
+            console.error(`[MovementIndexerClient] View function ${functionId} failed:`, error);
+            throw error;
+        }
+    }
+
+    /**
      * Get the current endpoint
      */
     getEndpoint(): string {
         return this.endpoint;
+    }
+
+    /**
+     * Get the current RPC endpoint
+     */
+    getRpcEndpoint(): string {
+        return this.rpcEndpoint;
     }
 }
 

@@ -19,6 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { priceService } from "@/lib/price-service";
 import { useCurrency } from "@/context/currency-context";
+import { ValidatorTable } from "./validator-table";
+
+const STAKING_POOLS = [
+    "0x1ef54ef84e7fb389095f83021755dd71bb51cbfbc8124a4349ec619f9d901f1f",
+    "0x830bfd0cd58b06dc938d409b6f3bc8ee97818ffcf9b32d714c068454afb644c7",
+    "0x39f116ee9ef048895bff51a5ce62229d153a6fe855798fa75810fd2b85008b9c",
+    "0xccba2d929183a642f64d10d27bae0947c112ed7f5427ca3c64a1f0dd0b4b76ea"
+];
 
 
 interface DashboardAsset {
@@ -142,8 +150,14 @@ export function DashboardStats() {
     const { activeRpc, refreshKey } = useNetwork();
     const { currency } = useCurrency();
     const [breakdownType, setBreakdownType] = useState<"tokens" | "platforms">("tokens");
-    const [mainTab, setMainTab] = useState<"positions" | "activity">("positions");
+    const [mainTab, setMainTab] = useState<"positions" | "activity" | "validators">("positions");
     const [viewTab, setViewTab] = useState<"dashboard" | "addressbook">("dashboard");
+
+    const [stakingData, setStakingData] = useState<{ totalStaked: number, totalRewards: number, isLoading: boolean }>({
+        totalStaked: 0,
+        totalRewards: 0,
+        isLoading: false
+    });
 
 
 
@@ -188,6 +202,8 @@ export function DashboardStats() {
     }, []);
 
     useEffect(() => {
+        const controller = new AbortController();
+
         const fetchData = async () => {
             const addressToFetch = selectedAddress || account?.address?.toString();
             if (!addressToFetch) return;
@@ -199,20 +215,17 @@ export function DashboardStats() {
                     net.rpcEndpoints.some(rpc => rpc.url === activeRpc)
                 ) || MOVEMENT_NETWORKS.mainnet;
 
-                const client = new MovementIndexerClient(currentNetwork.indexerUrl);
+                const client = new MovementIndexerClient(currentNetwork.indexerUrl, activeRpc);
 
-                // Add timeout to prevent hanging (increased to 30s)
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Indexer Request Timeout: Request took longer than 30 seconds')), 30000)
-                );
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
 
                 const dataPromise = Promise.all([
-                    client.getMoveBalance(addressToFetch),
-                    client.getFungibleAssetsFormatted(addressToFetch)
+                    client.getMoveBalance(addressToFetch, controller.signal),
+                    client.getFungibleAssetsFormatted(addressToFetch, controller.signal)
                 ]);
 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const [moveResponse, allAssets] = await Promise.race([dataPromise, timeoutPromise]) as [any, any];
+                const [moveResponse, allAssets] = await dataPromise;
+                clearTimeout(timeoutId);
 
                 if (moveResponse) {
                     setMoveData({
@@ -242,15 +255,51 @@ export function DashboardStats() {
                 setHoldingsPnL(`-${priceService.formatCurrency(totalVal * 0.05)}`); // Example PnL calculation
                 setAssets(assetsWithVals);
 
+                // Fetch Staking Data
+                setStakingData(prev => ({ ...prev, isLoading: true }));
+                try {
+                    const stakingResults = await Promise.all(STAKING_POOLS.map(pool =>
+                        client.getStakingData(addressToFetch, pool, controller.signal)
+                    ));
+
+                    const totalStakedFloat = stakingResults.reduce((acc, curr) =>
+                        acc + (curr ? Number(curr.stakedAmount) / 1e8 : 0), 0);
+                    const totalRewardsFloat = stakingResults.reduce((acc, curr) =>
+                        acc + (curr ? Number(curr.rewardsPending) / 1e8 : 0), 0);
+
+                    if (!controller.signal.aborted) {
+                        setStakingData({
+                            totalStaked: totalStakedFloat,
+                            totalRewards: totalRewardsFloat,
+                            isLoading: false
+                        });
+                    }
+                } catch (stakeErr) {
+                    if (!controller.signal.aborted) {
+                        console.error("Error fetching total stake:", stakeErr);
+                        setStakingData(prev => ({ ...prev, isLoading: false }));
+                    }
+                }
+
             } catch (error: any) {
-                console.error(`[DashboardStats] Failed to fetch data: ${error.message || error}`);
-                setHasError(true);
+                if (error.name === 'AbortError') {
+                    console.log('[DashboardStats] Fetch aborted');
+                } else {
+                    console.error(`[DashboardStats] Failed to fetch data: ${error.message || error}`);
+                    setHasError(true);
+                }
             } finally {
-                setIsLoading(false);
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
             }
         };
 
         fetchData();
+
+        return () => {
+            controller.abort();
+        };
     }, [account?.address, activeRpc, refreshKey, selectedAddress]);
 
     // Calculate breakdown for visual display
@@ -491,7 +540,9 @@ export function DashboardStats() {
                                 </div>
                                 <div className="space-y-1">
                                     <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider opacity-60">Claimable</span>
-                                    <p className="text-sm font-mono text-white">{priceService.formatCurrency(0)}</p>
+                                    <p className="text-sm font-mono text-white">
+                                        {stakingData.isLoading ? "..." : priceService.formatCurrency(stakingData.totalRewards * (priceService.getPriceSync("MOVE") || 0))}
+                                    </p>
 
                                 </div>
                                 <div className="space-y-1">
@@ -506,7 +557,9 @@ export function DashboardStats() {
                                         <div className="w-1.5 h-1.5 rounded-none bg-white/40" />
                                         <span className="text-[9px] text-muted-foreground font-mono uppercase tracking-wider">MOVE Staked</span>
                                     </div>
-                                    <p className="text-xs font-mono text-white">0.00%</p>
+                                    <p className="text-xs font-mono text-white">
+                                        {stakingData.isLoading ? "..." : `${stakingData.totalStaked.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MOVE`}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -589,14 +642,23 @@ export function DashboardStats() {
                                 Activity
                                 {mainTab === 'activity' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
                             </button>
+                            <button
+                                onClick={() => setMainTab("validators")}
+                                className={`pb-2 text-xs font-mono relative uppercase tracking-widest transition-none ${mainTab === 'validators' ? 'text-white' : 'text-muted-foreground opacity-60 hover:opacity-100'}`}
+                            >
+                                Validators
+                                {mainTab === 'validators' && <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-white" />}
+                            </button>
                         </div>
 
                         {mainTab === 'positions' ? (
                             <div className="space-y-4">
                                 <PositionsTable address={selectedAddress || account?.address?.toString() || ""} />
                             </div>
-                        ) : (
+                        ) : mainTab === 'activity' ? (
                             <ActivityTable address={selectedAddress || account?.address?.toString() || ""} />
+                        ) : (
+                            <ValidatorTable address={selectedAddress || account?.address?.toString() || ""} />
                         )}
                     </div>
 

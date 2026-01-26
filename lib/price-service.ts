@@ -143,6 +143,11 @@ export class PriceService {
         const usdValue = amount * usdPrice;
         return this.formatCurrency(usdValue);
     }
+
+    // Synchronous helper to get cached price
+    getPriceSync(symbol: string): number {
+        return this.prices[symbol.toUpperCase()] || 0;
+    }
 }
 
 export const priceService = new PriceService();
